@@ -22,6 +22,7 @@ export function init(status) {
     }
 }
 
+// --- UPDATED: Rewritten for robust, immediate feedback ---
 async function handleCheckVerification() {
     const checkBtn = document.getElementById('check-verification-btn');
     const messageBox = document.getElementById('email-message-box');
@@ -30,31 +31,23 @@ async function handleCheckVerification() {
     checkBtn.textContent = 'Checking...';
     messageBox.style.display = 'none';
 
-    // Ask the background script to get the latest user status from the server.
-    // The background script will then broadcast this new status, and the
-    // content.js router will load the correct view if verification is successful.
-    chrome.runtime.sendMessage({ type: 'GET_USER_STATUS', forceRefresh: true });
+    // Ask the background script for the latest user status from the server.
+    const latestStatus = await chrome.runtime.sendMessage({ type: 'GET_USER_STATUS', forceRefresh: true });
 
-    // This timer will only run if the view has NOT changed after 3 seconds,
-    // which means the verification was not successful.
-    setTimeout(() => {
-        // First, check if the button still exists in the DOM. If it doesn't,
-        // it means the view has successfully changed and we should do nothing.
-        const stillHereBtn = document.getElementById('check-verification-btn');
-        if (stillHereBtn) {
-            // If the button is still here, it means verification failed.
-            // Re-enable the button and show an error message.
-            stillHereBtn.disabled = false;
-            stillHereBtn.textContent = "I've Verified My Email";
-            
-            const stillHereMsgBox = document.getElementById('email-message-box');
-            if (stillHereMsgBox) {
-                stillHereMsgBox.textContent = "Email not verified yet. Please check your inbox and try again.";
-                stillHereMsgBox.className = 'feedback error';
-                stillHereMsgBox.style.display = 'block';
-            }
-        }
-    }, 3000); // Using a slightly longer timeout for reliability
+    // Dispatch an event with the absolute latest status.
+    // The router in content.js will see this and switch the view if verification is complete.
+    const event = new CustomEvent('auth-state-update', { detail: latestStatus });
+    document.dispatchEvent(event);
+
+    // If verification is still not complete, the view won't change.
+    // In that case, we should show a message and re-enable the button.
+    if (!latestStatus.isEmailVerified) {
+        messageBox.textContent = "Email not verified yet. Please check your inbox and try again.";
+        messageBox.className = 'feedback error';
+        messageBox.style.display = 'block';
+        checkBtn.disabled = false;
+        checkBtn.textContent = "I've Verified My Email";
+    }
 }
 
 async function handleResendEmail(e) {
@@ -78,7 +71,6 @@ async function handleLogout() {
     const logoutBtn = document.getElementById('logout-btn-email');
     if (logoutBtn) logoutBtn.disabled = true;
     const response = await chrome.runtime.sendMessage({ type: 'LOGOUT' });
-    // Directly trigger the UI update, just like in login.js
     if (response.success) {
         const event = new CustomEvent('auth-state-update', { detail: response.status });
         document.dispatchEvent(event);
