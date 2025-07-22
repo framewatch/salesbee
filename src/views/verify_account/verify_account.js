@@ -16,7 +16,6 @@ async function handleLinkAccount() {
     const linkBtn = document.getElementById('link-account-btn');
     const messageBox = document.getElementById('verify-message-box');
 
-    // Simple check to see if the user is on a Vinted member page
     if (!window.location.href.includes('/member/')) {
         messageBox.textContent = "Error: Please navigate to your Vinted profile page first.";
         messageBox.className = 'feedback error';
@@ -24,9 +23,8 @@ async function handleLinkAccount() {
         return;
     }
 
-    // Extract username from URL (e.g., "https://www.vinted.com/member/12345-jsmith")
     const urlParts = window.location.pathname.split('/');
-    const vintedUsername = urlParts.pop() || urlParts.pop(); // Handles trailing slash
+    const vintedUsername = urlParts.pop() || urlParts.pop();
 
     if (!vintedUsername) {
         messageBox.textContent = "Error: Could not find Vinted username in the URL.";
@@ -48,11 +46,9 @@ async function handleLinkAccount() {
         messageBox.textContent = "Account linked successfully! Refreshing...";
         messageBox.className = 'feedback success';
         messageBox.style.display = 'block';
-        // Dispatch an event to trigger a state refresh in background.js
-        // and reload the UI.
-        setTimeout(() => {
-             chrome.runtime.sendMessage({ type: 'GET_USER_STATUS', forceRefresh: true });
-        }, 2000);
+        // --- UPDATED: Dispatch event with new status for an instant UI update ---
+        const event = new CustomEvent('auth-state-update', { detail: response.status });
+        document.dispatchEvent(event);
 
     } else {
         messageBox.textContent = `Error: ${response.error}`;
@@ -70,7 +66,6 @@ async function handleLogout() {
     const response = await chrome.runtime.sendMessage({ type: 'LOGOUT' });
 
     if (response.success) {
-        // This event will be caught by content.js to reload the view
         const event = new CustomEvent('auth-state-update', { detail: response.status });
         document.dispatchEvent(event);
     }
