@@ -32,10 +32,9 @@ async function handleStartTrial() {
         messageBox.className = 'feedback success';
         messageBox.style.display = 'block';
         
-        // Refresh the user status to trigger the UI router in content.js
-        setTimeout(() => {
-             chrome.runtime.sendMessage({ type: 'GET_USER_STATUS', forceRefresh: true });
-        }, 2000);
+        // --- UPDATED: Dispatch event with new status to trigger UI router instantly ---
+        const event = new CustomEvent('auth-state-update', { detail: response.status });
+        document.dispatchEvent(event);
 
     } else {
         messageBox.textContent = `Error: ${response.error}`;
