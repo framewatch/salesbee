@@ -70,6 +70,12 @@
         }
     });
 
+    // --- ADDED: Listen for the custom event from view modules ---
+    document.addEventListener('auth-state-update', (e) => {
+        console.log("%c[LISTENER] Received 'auth-state-update' from a view.", "color: purple;");
+        updateUserInterface(e.detail);
+    });
+
     try {
         console.log("%c[INIT] Requesting initial status from background script.", "color: purple;");
         const initialStatus = await chrome.runtime.sendMessage({ type: 'GET_USER_STATUS' });
