@@ -43,15 +43,18 @@ const serializeUser = (user) => {
     return { uid: user.uid, email: user.email, displayName: user.displayName, emailVerified: user.emailVerified };
 };
 
-// This is the single source of truth for creating the status object.
 async function buildUserStatus(user) {
     if (!user) {
-        return { user: null, isEmailVerified: false, isSubscribed: false, isVintedVerified: false, hasHadTrial: false, role: null };
+        userStatus = { user: null, isEmailVerified: false, isSubscribed: false, isVintedVerified: false, hasHadTrial: false, role: null };
+        return userStatus;
     }
     try {
         await user.reload();
         const freshUser = auth.currentUser;
-        if (!freshUser) return { user: null, isEmailVerified: false, isSubscribed: false, isVintedVerified: false, hasHadTrial: false, role: null };
+        if (!freshUser) {
+             userStatus = { user: null, isEmailVerified: false, isSubscribed: false, isVintedVerified: false, hasHadTrial: false, role: null };
+             return userStatus
+        };
 
         const idTokenResult = await freshUser.getIdTokenResult();
         const stripeRole = idTokenResult.claims.stripeRole || null;
@@ -77,12 +80,14 @@ async function buildUserStatus(user) {
         }
         
         const finalStatus = { user: serializeUser(freshUser), isEmailVerified, isSubscribed, isVintedVerified, hasHadTrial, role: stripeRole };
-        userStatus = finalStatus; // Update the global status
+        userStatus = finalStatus;
         return finalStatus;
 
     } catch (error) {
         console.error("Error building user status:", error);
-        return { user: serializeUser(user), isEmailVerified: user.emailVerified, isSubscribed: false, isVintedVerified: false, hasHadTrial: false, role: null };
+        const errorStatus = { user: serializeUser(user), isEmailVerified: user.emailVerified, isSubscribed: false, isVintedVerified: false, hasHadTrial: false, role: null };
+        userStatus = errorStatus;
+        return userStatus;
     }
 }
 
@@ -101,7 +106,6 @@ const broadcastStatusUpdate = () => {
 };
 
 if (auth) {
-    // This listener handles background changes (e.g., token refresh)
     auth.onAuthStateChanged(async (user) => {
         await buildUserStatus(user);
         broadcastStatusUpdate();
@@ -120,10 +124,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         switch (message.type) {
             case 'GET_USER_STATUS':
                 if (message.forceRefresh) {
-                    await buildUserStatus(auth.currentUser);
+                    const newStatus = await buildUserStatus(auth.currentUser);
                     broadcastStatusUpdate();
+                    sendResponse(newStatus);
+                } else {
+                    sendResponse(userStatus);
                 }
-                sendResponse(userStatus);
                 break;
 
             case 'SEND_VERIFICATION_EMAIL':
@@ -165,12 +171,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     await startFreeTrial();
                     finalStatus = await buildUserStatus(auth.currentUser);
                     sendResponse({ success: true, status: finalStatus });
-                } catch (error) {
+                } catch (error) { // <-- CORRECTED SYNTAX
                     sendResponse({ success: false, error: error.message });
                 }
                 break;
 
-            // RESTORED: Handler for linking Vinted account
             case 'LINK_VINTED_ACCOUNT':
                 if (!functions) return sendResponse({ success: false, error: "Functions not ready." });
                 try {
@@ -178,25 +183,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     await linkVintedAccount({ vintedUsername: message.payload.vintedUsername });
                     finalStatus = await buildUserStatus(auth.currentUser);
                     sendResponse({ success: true, status: finalStatus });
-                } catch (error) {
+                } catch (error) { // <-- CORRECTED SYNTAX
                     sendResponse({ success: false, error: error.message });
                 }
                 break;
 
-            // RESTORED: Handler for using a feature
             case 'USE_FEATURE':
                 if (!functions) return sendResponse({ success: false, error: "Functions not ready." });
                 try {
                     const useFeature = functions.httpsCallable('useFeature');
                     const result = await useFeature({ feature: message.payload.featureName });
-                    // This action does not change auth state, so it just returns the result.
                     sendResponse({ success: true, data: result.data });
-                } catch (error) {
+                } catch (error) { // <-- CORRECTED SYNTAX
                     sendResponse({ success: false, error: error.message });
                 }
                 break;
         }
     })();
 
-    return true; // Keep message channel open for async response
+    return true; 
 });
